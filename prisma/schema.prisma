@@ -1,0 +1,359 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+model AppRoles {
+  RoleID       Int            @id(map: "PK__AppRoles__8AFACE3AF6CF37A5") @default(autoincrement())
+  TenantID     Int
+  RoleName     String         @db.NVarChar(50)
+  IsActive     Boolean?
+  SysTenants   SysTenants     @relation(fields: [TenantID], references: [TenantID], onUpdate: NoAction, map: "FK__AppRoles__Tenant__49C3F6B7")
+  AppUserRoles AppUserRoles[]
+
+  @@unique([TenantID, RoleID], map: "UQ_Tenant_RoleID")
+}
+
+model AppUserRoles {
+  TenantID Int
+  UserID   Int
+  RoleID   Int
+  AppRoles AppRoles @relation(fields: [TenantID, RoleID], references: [TenantID, RoleID], onUpdate: NoAction, map: "FK_UserRole_Role")
+  AppUsers AppUsers @relation(fields: [TenantID, UserID], references: [TenantID, UserID], onUpdate: NoAction, map: "FK_UserRole_User")
+
+  @@id([TenantID, UserID, RoleID], map: "PK__AppUserR__C4693185747B04AE")
+}
+
+model AppUsers {
+  UserID       Int            @id(map: "PK__AppUsers__1788CCAC0E5F4033") @default(autoincrement())
+  TenantID     Int
+  BranchID     Int?
+  Username     String         @db.NVarChar(50)
+  PasswordHash String         @db.NVarChar(255)
+  IsActive     Boolean?
+  FullName     String?        @db.NVarChar(100)
+  Email        String?        @db.NVarChar(100)
+  AppUserRoles AppUserRoles[]
+  SysTenants   SysTenants     @relation(fields: [TenantID], references: [TenantID], onUpdate: NoAction, map: "FK__AppUsers__Tenant__44FF419A")
+  SysBranches  SysBranches?   @relation(fields: [TenantID, BranchID], references: [TenantID, BranchID], onUpdate: NoAction, map: "FK_User_Branch")
+  SystemShifts SystemShifts[]
+
+  @@unique([TenantID, UserID], map: "UQ_Tenant_UserID")
+  @@unique([TenantID, Username], map: "UQ_Tenant_Username")
+}
+
+model CardGroups {
+  GroupID    Int        @id(map: "PK__CardGrou__149AF30A46A474FA") @default(autoincrement())
+  TenantID   Int
+  GroupName  String     @db.NVarChar(50)
+  IsDeleted  Boolean?
+  SysTenants SysTenants @relation(fields: [TenantID], references: [TenantID], onUpdate: NoAction, map: "FK__CardGroup__Tenan__6B24EA82")
+  Cards      Cards[]
+
+  @@unique([TenantID, GroupID], map: "UQ_Tenant_GroupID")
+}
+
+model CardLedger {
+  LedgerID      BigInt    @id(map: "PK__CardLedg__AE70E0AFAEC66591") @default(autoincrement())
+  TenantID      Int
+  CardUID       String    @db.NVarChar(50)
+  TxnType       String    @db.NVarChar(20)
+  SourceType    String    @db.NVarChar(30)
+  SourceRefID   BigInt
+  Amount        Decimal   @db.Decimal(12, 2)
+  BalanceAfter  Decimal   @db.Decimal(12, 2)
+  CorrelationID String    @db.UniqueIdentifier
+  CreatedDate   DateTime? @db.DateTime
+  Cards         Cards     @relation(fields: [TenantID, CardUID], references: [TenantID, CardUID], onUpdate: NoAction, map: "FK__CardLedger__123EB7A3")
+
+  @@index([TenantID, CardUID, CreatedDate(sort: Desc)], map: "IX_Ledger_Card")
+}
+
+model Cards {
+  TenantID       Int
+  CardUID        String                   @db.NVarChar(50)
+  MemberID       Int?
+  GroupID        Int?
+  CashBalance    Decimal?                 @db.Decimal(12, 2)
+  SubsidyBalance Decimal?                 @db.Decimal(12, 2)
+  Status         String?                  @db.NVarChar(20)
+  RowVersion     Unsupported("timestamp")
+  CardLedger     CardLedger[]
+  SysTenants     SysTenants               @relation(fields: [TenantID], references: [TenantID], onUpdate: NoAction, map: "FK__Cards__TenantID__71D1E811")
+  CardGroups     CardGroups?              @relation(fields: [TenantID, GroupID], references: [TenantID, GroupID], onUpdate: NoAction, map: "FK_Card_Group")
+  Members        Members?                 @relation(fields: [TenantID, MemberID], references: [TenantID, MemberID], onUpdate: NoAction, map: "FK_Card_Member")
+  SalesOrders    SalesOrders[]
+  TxnCashier     TxnCashier[]
+
+  @@id([TenantID, CardUID], map: "PK__Cards__270F7F7F2C806875")
+}
+
+model Products {
+  ProductID         BigInt            @id(map: "PK__Products__B40CC6ED97D65196") @default(autoincrement())
+  TenantID          Int
+  VendorID          String            @db.NVarChar(20)
+  ProductCode       String            @db.NVarChar(50)
+  ProductName       String            @db.NVarChar(200)
+  Price             Decimal           @db.Decimal(12, 2)
+  IsActive          Boolean?
+  Category          String?           @db.NVarChar(100)
+  ImageURL          String?           @db.NVarChar(500)
+  Vendors           Vendors           @relation(fields: [TenantID, VendorID], references: [TenantID, VendorID], onUpdate: NoAction, map: "FK__Products__68487DD7")
+  SalesOrderItems   SalesOrderItems[]
+  MenuSchedules     MenuSchedules[]
+  // 💡 เพิ่มบรรทัดนี้: ระบุว่าเป็นเมนูยืนพื้นหรือไม่ (ถ้า true จะไม่เอามาแสดงในหน้าจัดตาราง)
+  IsAlwaysAvailable Boolean?          @default(false)
+
+  @@unique([TenantID, ProductCode], map: "UQ_Tenant_ProductCode")
+  @@unique([TenantID, ProductID], map: "UQ_Tenant_ProductID")
+}
+
+// 💡 ตารางจัดตารางเมนูอาหารล่วงหน้า
+model MenuSchedules {
+  ScheduleID Int @id @default(autoincrement())
+  TenantID   Int
+
+  TargetDate DateTime @db.Date // วันที่ขาย (เช่น 2026-03-16)
+  MealPeriod String   @db.NVarChar(20) // ช่วงเวลา: BREAKFAST, LUNCH, DINNER, ALL_DAY
+
+  ProductID BigInt // 💡 ใช้ BigInt ให้ตรงกับตาราง Products
+  Products  Products @relation(fields: [ProductID], references: [ProductID], onUpdate: NoAction, map: "FK_MenuSchedules_Products")
+
+  StockQty Int? // (Optional) กำหนดโควต้าจำนวนที่ขายในมื้อนั้น (เว้นว่างไว้คือขายไม่อั้น)
+  IsActive Boolean? @default(true)
+
+  // ป้องกันการจัดเมนูเดียวกัน ซ้ำในมื้อเดียวกัน ของวันเดียวกัน
+  @@unique([TenantID, TargetDate, MealPeriod, ProductID], map: "UQ_MenuSchedule_Date_Period_Product")
+}
+
+model SalesOrderItems {
+  ItemID      BigInt      @id(map: "PK__SalesOrd__727E83EB26372D11") @default(autoincrement())
+  TenantID    Int
+  OrderID     BigInt
+  ProductID   BigInt?
+  ProductName String      @db.NVarChar(200)
+  Qty         Int
+  UnitPrice   Decimal     @db.Decimal(12, 2)
+  TotalPrice  Decimal     @db.Decimal(12, 2)
+  SalesOrders SalesOrders @relation(fields: [TenantID, OrderID], references: [TenantID, OrderID], onUpdate: NoAction, map: "FK_Item_Order")
+  Products    Products?   @relation(fields: [TenantID, ProductID], references: [TenantID, ProductID], onUpdate: NoAction, map: "FK_Item_Product")
+}
+
+model SalesOrders {
+  OrderID         BigInt            @id(map: "PK__SalesOrd__C3905BAFFB17C79A") @default(autoincrement())
+  TenantID        Int
+  BranchID        Int
+  OrderNo         String            @db.NVarChar(50)
+  IdempotencyKey  String            @db.NVarChar(100)
+  CorrelationID   String            @db.UniqueIdentifier
+  CardUID         String            @db.NVarChar(50)
+  VendorID        String            @db.NVarChar(20)
+  TerminalID      String            @db.NVarChar(20)
+  TotalAmount     Decimal           @db.Decimal(12, 2)
+  OrderDate       DateTime?         @db.DateTime
+  ShiftID         BigInt?
+  SalesOrderItems SalesOrderItems[]
+  Vendors         Vendors           @relation(fields: [TenantID, VendorID], references: [TenantID, VendorID], onUpdate: NoAction, map: "FK__SalesOrders__1AD3FDA4")
+  Terminals       Terminals         @relation(fields: [TenantID, TerminalID], references: [TenantID, TerminalID], onUpdate: NoAction, map: "FK__SalesOrders__1BC821DD")
+  Cards           Cards             @relation(fields: [TenantID, CardUID], references: [TenantID, CardUID], onUpdate: NoAction, map: "FK__SalesOrders__1CBC4616")
+  SystemShifts    SystemShifts?     @relation(fields: [TenantID, ShiftID], references: [TenantID, ShiftID], onUpdate: NoAction, map: "FK_Order_Shift")
+
+  @@unique([TenantID, OrderID], map: "UQ_Tenant_OrderID")
+  @@unique([TenantID, OrderNo], map: "UQ_Tenant_OrderNo")
+  @@index([TenantID, BranchID, OrderDate], map: "IX_Sales_TenantBranch")
+}
+
+model SubsidyRules {
+  RuleID       Int        @id(map: "PK__SubsidyR__110458C2A305DB0D") @default(autoincrement())
+  TenantID     Int
+  RuleName     String     @db.NVarChar(100)
+  Amount       Decimal    @db.Decimal(12, 2)
+  ScheduleType String     @db.NVarChar(20)
+  IsActive     Boolean?
+  SysTenants   SysTenants @relation(fields: [TenantID], references: [TenantID], onUpdate: NoAction, map: "FK__SubsidyRu__Tenan__25518C17")
+}
+
+model SysBranches {
+  BranchID   Int         @id(map: "PK__SysBranc__A1682FA55972F48E") @default(autoincrement())
+  TenantID   Int
+  BranchCode String      @db.NVarChar(20)
+  BranchName String      @db.NVarChar(100)
+  IsActive   Boolean?
+  AppUsers   AppUsers[]
+  SysTenants SysTenants  @relation(fields: [TenantID], references: [TenantID], onUpdate: NoAction, map: "FK__SysBranch__Tenan__403A8C7D")
+  Terminals  Terminals[]
+  Vendors    Vendors[]
+
+  @@unique([TenantID, BranchCode], map: "UQ_Tenant_BranchCode")
+  @@unique([TenantID, BranchID], map: "UQ_Tenant_BranchID")
+}
+
+model SysSubscriptionPlans {
+  PlanID       String   @id(map: "PK__SysSubsc__755C22D73E1291D2") @db.NVarChar(20)
+  PlanName     String   @db.NVarChar(100)
+  PriceMonthly Decimal  @db.Decimal(12, 2)
+  IsActive     Boolean?
+}
+
+model SystemShifts {
+  ShiftID     BigInt        @id(map: "PK__SystemSh__C0A838E1C32E0596") @default(autoincrement())
+  TenantID    Int
+  BranchID    Int
+  TerminalID  String        @db.NVarChar(20)
+  UserID      Int
+  OpenTime    DateTime?     @db.DateTime
+  CloseTime   DateTime?     @db.DateTime
+  Status      String?       @db.NVarChar(20)
+  SalesOrders SalesOrders[]
+  Terminals   Terminals     @relation(fields: [TenantID, TerminalID], references: [TenantID, TerminalID], onUpdate: NoAction, map: "FK__SystemShifts__03F0984C")
+  AppUsers    AppUsers      @relation(fields: [TenantID, UserID], references: [TenantID, UserID], onUpdate: NoAction, map: "FK_Shift_User")
+
+  @@unique([TenantID, ShiftID], map: "UQ_Tenant_ShiftID")
+}
+
+model SysTenants {
+  TenantID     Int            @id(map: "PK__SysTenan__2E9B4781343A30F1") @default(autoincrement())
+  TenantName   String         @db.NVarChar(100)
+  IsActive     Boolean?
+  IsDeleted    Boolean?
+  CreatedDate  DateTime?      @db.DateTime
+  AppRoles     AppRoles[]
+  AppUsers     AppUsers[]
+  CardGroups   CardGroups[]
+  Cards        Cards[]
+  Departments  Departments[]
+  Members      Members[]
+  SubsidyRules SubsidyRules[]
+  SysBranches  SysBranches[]
+  Terminals    Terminals[]
+  Vendors      Vendors[]
+  WelfareRules WelfareRules[]
+}
+
+model Terminals {
+  TenantID     Int
+  TerminalID   String         @db.NVarChar(20)
+  BranchID     Int?
+  IsActive     Boolean?
+  TerminalName String         @db.NVarChar(100)
+  TerminalType String         @db.NVarChar(20)
+  VendorID     String?        @db.NVarChar(20)
+  SalesOrders  SalesOrders[]
+  SystemShifts SystemShifts[]
+  SysTenants   SysTenants     @relation(fields: [TenantID], references: [TenantID], onUpdate: NoAction, map: "FK__Terminals__Tenan__7A672E12")
+  SysBranches  SysBranches?   @relation(fields: [TenantID, BranchID], references: [TenantID, BranchID], onUpdate: NoAction, map: "FK_Terminal_Branch")
+  Vendors      Vendors?       @relation(fields: [TenantID, VendorID], references: [TenantID, VendorID], onUpdate: NoAction)
+  TxnCashier   TxnCashier[]
+
+  @@id([TenantID, TerminalID], map: "PK__Terminal__A83C61B5FC96651A")
+}
+
+model TxnCashier {
+  TxnID          BigInt    @id(map: "PK__TxnCashi__C1960874785012B3") @default(autoincrement())
+  TenantID       Int
+  BranchID       Int
+  TxnNo          String    @db.NVarChar(50)
+  IdempotencyKey String    @db.NVarChar(100)
+  CorrelationID  String    @db.UniqueIdentifier
+  TerminalID     String    @db.NVarChar(20)
+  CardUID        String    @db.NVarChar(50)
+  Amount         Decimal   @db.Decimal(12, 2)
+  TxnDate        DateTime? @db.DateTime
+  Terminals      Terminals @relation(fields: [TenantID, TerminalID], references: [TenantID, TerminalID], onUpdate: NoAction, map: "FK__TxnCashier__0C85DE4D")
+  Cards          Cards     @relation(fields: [TenantID, CardUID], references: [TenantID, CardUID], onUpdate: NoAction, map: "FK__TxnCashier__0D7A0286")
+
+  @@unique([TenantID, IdempotencyKey], map: "UQ_Tenant_Idempotency")
+  @@unique([TenantID, TxnID], map: "UQ_Tenant_TxnID")
+  @@unique([TenantID, TxnNo], map: "UQ_Tenant_TxnNo")
+  @@index([TenantID, TxnDate], map: "IX_Txn_TenantDate")
+}
+
+model Vendors {
+  TenantID       Int
+  VendorID       String        @db.NVarChar(20)
+  BranchID       Int?
+  VendorName     String        @db.NVarChar(100)
+  GPSharePercent Decimal?      @db.Decimal(5, 2)
+  IsActive       Boolean?
+  Products       Products[]
+  SalesOrders    SalesOrders[]
+  terminals      Terminals[]
+  SysTenants     SysTenants    @relation(fields: [TenantID], references: [TenantID], onUpdate: NoAction, map: "FK__Vendors__TenantI__5EBF139D")
+  SysBranches    SysBranches?  @relation(fields: [TenantID, BranchID], references: [TenantID, BranchID], onUpdate: NoAction, map: "FK_Vendor_Branch")
+
+  @@id([TenantID, VendorID], map: "PK__Vendors__0153260C5425A278")
+}
+
+model Members {
+  MemberID    Int        @id(map: "PK__Members__0CF04B38248169BE") @default(autoincrement())
+  TenantID    Int
+  MemberCode  String     @db.NVarChar(50)
+  MemberType  String     @db.NVarChar(20)
+  FullName    String     @db.NVarChar(200)
+  Department  String?    @db.NVarChar(100)
+  Status      String?    @db.NVarChar(20)
+  CreatedDate DateTime?  @db.DateTime
+  GroupID     Int?
+  Cards       Cards[]
+  SysTenants  SysTenants @relation(fields: [TenantID], references: [TenantID], onUpdate: NoAction, map: "FK__Members__TenantI__68487DD7")
+
+  @@unique([TenantID, MemberCode], map: "UQ_Tenant_MemberCode")
+  @@unique([TenantID, MemberID], map: "UQ_Tenant_MemberID")
+}
+
+model WelfareRules {
+  RuleID       Int        @id(map: "PK__WelfareR__110458C26C5B9457") @default(autoincrement())
+  TenantID     Int
+  RuleName     String     @db.NVarChar(100)
+  Amount       Decimal    @db.Decimal(10, 2)
+  ScheduleType String     @db.NVarChar(20)
+  ScheduleTime String?    @db.NVarChar(10)
+  TargetGroup  String     @db.NVarChar(50)
+  IsActive     Boolean?   @default(true, map: "DF__WelfareRu__IsAct__3C34F16F")
+  LastRunAt    DateTime?  @db.DateTime
+  ActionDate   Int?
+  ActionDays   String?    @db.NVarChar(50)
+  SkipHolidays Boolean?   @default(true)
+  SysTenants   SysTenants @relation(fields: [TenantID], references: [TenantID], onUpdate: NoAction, map: "FK_Welfare_Tenant")
+}
+
+model PromoCampaigns {
+  CampaignID         Int                  @id(map: "PK_PromoCampaigns") @default(autoincrement())
+  TenantID           Int
+  CampaignName       String               @db.NVarChar(100)
+  RewardValue        Decimal              @db.Decimal(12, 2)
+  IsActive           Boolean?             @default(true)
+  CampaignType       String               @db.NVarChar(50)
+  ConditionDesc      String?              @db.NVarChar(200)
+  RewardType         String?              @db.NVarChar(50)
+  CreatedDate        DateTime?            @default(now(), map: "DF__PromoCamp__Creat__57DD0BE4") @db.DateTime
+  EndDate            DateTime?            @db.DateTime
+  StartDate          DateTime?            @db.DateTime
+  EndTime            String?              @db.NVarChar(10)
+  StartTime          String?              @db.NVarChar(10)
+  PromoRedemptionLog PromoRedemptionLog[]
+}
+
+model PromoRedemptionLog {
+  LogID          BigInt         @id(map: "PK_PromoRedemptionLog") @default(autoincrement())
+  TenantID       Int
+  CampaignID     Int
+  TxnID          BigInt?
+  CardUID        String         @db.NVarChar(50)
+  RedeemedDate   DateTime?      @default(now(), map: "DF__PromoRede__Redee__55F4C372") @db.DateTime
+  PromoCampaigns PromoCampaigns @relation(fields: [CampaignID], references: [CampaignID], onUpdate: NoAction)
+}
+
+model Departments {
+  DepartmentID   Int        @id @default(autoincrement())
+  TenantID       Int
+  DepartmentName String     @db.NVarChar(100)
+  IsActive       Boolean?   @default(true)
+  SysTenants     SysTenants @relation(fields: [TenantID], references: [TenantID], onUpdate: NoAction)
+
+  @@unique([TenantID, DepartmentName], map: "UQ_Tenant_DepartmentName")
+}

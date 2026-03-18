@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+model SysTenants {
+  TenantID    Int       @id @default(autoincrement())
+  TenantName  String    @db.NVarChar(100)
+  IsActive    Boolean?  @default(true)
+  IsDeleted   Boolean?  @default(false)
+  CreatedDate DateTime? @default(now())
+
+  Members     Members[]
+  Cards       Cards[]
+}
+
+model Members {
+  MemberID    Int       @id @default(autoincrement())
+  TenantID    Int
+  MemberCode  String    @db.NVarChar(50)
+  MemberType  String    @db.NVarChar(20)
+  FullName    String    @db.NVarChar(200)
+  Department  String?   @db.NVarChar(100)
+  Status      String?   @default("ACTIVE") @db.NVarChar(20)
+  CreatedDate DateTime? @default(now())
+
+  Tenant      SysTenants @relation(fields: [TenantID], references: [TenantID])
+  Cards       Cards[]
+
+  @@unique([TenantID, MemberCode])
+}
+
+model Cards {
+  TenantID       Int
+  CardUID        String   @db.NVarChar(50)
+  MemberID       Int?
+  GroupID        Int?
+  CashBalance    Decimal? @default(0) @db.Decimal(12, 2)
+  SubsidyBalance Decimal? @default(0) @db.Decimal(12, 2)
+  Status         String?  @default("ACTIVE") @db.NVarChar(20)
+
+  Tenant         SysTenants @relation(fields: [TenantID], references: [TenantID])
+  Member         Members?   @relation(fields: [TenantID, MemberID], references: [TenantID, MemberID])
+
+  @@id([TenantID, CardUID])
+}
