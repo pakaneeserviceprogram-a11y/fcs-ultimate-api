@@ -335,6 +335,9 @@ model PromoCampaigns {
   StartDate          DateTime?            @db.DateTime
   EndTime            String?              @db.NVarChar(10)
   StartTime          String?              @db.NVarChar(10)
+  // 💡 เพิ่มฟิลด์ใหม่นี้เข้าไป
+  ConditionMinAmount Decimal?  @db.Decimal(12, 2)
+  // ... ฟิลด์เดิม
   PromoRedemptionLog PromoRedemptionLog[]
 }
 

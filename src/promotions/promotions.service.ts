@@ -8,7 +8,7 @@ export class PromotionsService {
   async findAll(tenantId: number) {
     const campaigns = await this.prisma.promoCampaigns.findMany({
       where: { TenantID: tenantId },
-      include: { _count: { select: { PromoRedemptionLog: true } } },
+      include: { _count: { select: { PromoRedemptionLog: true } } }, // 💡 ถ้า Error ตรงนี้เพราะยังไม่มีตาราง ให้ลบออกก่อนได้ครับ
       orderBy: { CampaignID: 'desc' }
     });
 
@@ -17,13 +17,14 @@ export class PromotionsService {
       name: c.CampaignName,
       type: c.CampaignType,
       condition: c.ConditionDesc || '-',
+      minAmount: Number(c.ConditionMinAmount || 0), // 💡 ส่งยอดขั้นต่ำไปให้หน้าจอ
       rewardType: c.RewardType,
       rewardValue: Number(c.RewardValue),
-      used: c._count.PromoRedemptionLog,
+      used: c._count?.PromoRedemptionLog || 0,
       startDate: c.StartDate ? c.StartDate.toISOString().split('T')[0] : '',
       endDate: c.EndDate ? c.EndDate.toISOString().split('T')[0] : '',
-      startTime: c.StartTime || '', // 💡 ส่งค่าเวลาออกไป
-      endTime: c.EndTime || '',     // 💡 ส่งค่าเวลาออกไป
+      startTime: c.StartTime || '',
+      endTime: c.EndTime || '',
       status: c.IsActive ? 'ACTIVE' : 'INACTIVE'
     }));
   }
@@ -35,12 +36,13 @@ export class PromotionsService {
         CampaignName: data.name,
         CampaignType: data.type,
         ConditionDesc: data.condition,
+        ConditionMinAmount: data.minAmount || 0, // 💡 บันทึกยอดขั้นต่ำ
         RewardType: data.rewardType,
         RewardValue: data.rewardValue,
         StartDate: data.startDate ? new Date(data.startDate) : null,
         EndDate: data.endDate ? new Date(data.endDate) : null,
-        StartTime: data.startTime || null, // 💡 รับค่าเวลาบันทึก
-        EndTime: data.endTime || null,     // 💡 รับค่าเวลาบันทึก
+        StartTime: data.startTime || null,
+        EndTime: data.endTime || null,
         IsActive: true
       }
     });
@@ -53,12 +55,13 @@ export class PromotionsService {
         CampaignName: data.name,
         CampaignType: data.type,
         ConditionDesc: data.condition,
+        ConditionMinAmount: data.minAmount || 0, // 💡 บันทึกยอดขั้นต่ำ
         RewardType: data.rewardType,
         RewardValue: data.rewardValue,
         StartDate: data.startDate ? new Date(data.startDate) : null,
         EndDate: data.endDate ? new Date(data.endDate) : null,
-        StartTime: data.startTime || null, // 💡 รับค่าเวลาบันทึก
-        EndTime: data.endTime || null,     // 💡 รับค่าเวลาบันทึก
+        StartTime: data.startTime || null,
+        EndTime: data.endTime || null,
         IsActive: data.isActive
       }
     });
