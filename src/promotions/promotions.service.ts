@@ -8,7 +8,11 @@ export class PromotionsService {
   async findAll(tenantId: number) {
     const campaigns = await this.prisma.promoCampaigns.findMany({
       where: { TenantID: tenantId },
-      include: { _count: { select: { PromoRedemptionLog: true } } }, // 💡 ถ้า Error ตรงนี้เพราะยังไม่มีตาราง ให้ลบออกก่อนได้ครับ
+      include: { 
+        _count: { select: { PromoRedemptionLog: true } },
+        PromoVendors: true,   // 💡 ดึงข้อมูลร้านค้าที่ผูกไว้
+        PromoProducts: true   // 💡 ดึงข้อมูลสินค้าที่ผูกไว้
+      }, 
       orderBy: { CampaignID: 'desc' }
     });
 
@@ -17,7 +21,7 @@ export class PromotionsService {
       name: c.CampaignName,
       type: c.CampaignType,
       condition: c.ConditionDesc || '-',
-      minAmount: Number(c.ConditionMinAmount || 0), // 💡 ส่งยอดขั้นต่ำไปให้หน้าจอ
+      minAmount: Number(c.ConditionMinAmount || 0), 
       rewardType: c.RewardType,
       rewardValue: Number(c.RewardValue),
       used: c._count?.PromoRedemptionLog || 0,
@@ -25,6 +29,14 @@ export class PromotionsService {
       endDate: c.EndDate ? c.EndDate.toISOString().split('T')[0] : '',
       startTime: c.StartTime || '',
       endTime: c.EndTime || '',
+      targetMemberType: c.TargetMemberType || 'ALL',
+      
+      // 💡 ข้อมูล Scope ที่เพิ่มเข้ามาใหม่
+      scopeType: c.ScopeType || 'ALL',
+      selectedVendors: c.PromoVendors.map(v => v.VendorID),
+      // แปลง BigInt กลับเป็น String เพื่อส่งให้ Frontend
+      selectedProducts: c.PromoProducts.map(p => p.ProductID.toString()), 
+
       status: c.IsActive ? 'ACTIVE' : 'INACTIVE'
     }));
   }
@@ -35,15 +47,26 @@ export class PromotionsService {
         TenantID: tenantId,
         CampaignName: data.name,
         CampaignType: data.type,
-        ConditionDesc: data.condition,
-        ConditionMinAmount: data.minAmount || 0, // 💡 บันทึกยอดขั้นต่ำ
+        ConditionDesc: data.type === 'MEMBER_DISCOUNT' ? `สำหรับสมาชิก: ${data.targetMemberType}` : data.condition,
+        ConditionMinAmount: data.minAmount || 0, 
         RewardType: data.rewardType,
         RewardValue: data.rewardValue,
         StartDate: data.startDate ? new Date(data.startDate) : null,
         EndDate: data.endDate ? new Date(data.endDate) : null,
         StartTime: data.startTime || null,
         EndTime: data.endTime || null,
-        IsActive: true
+        TargetMemberType: data.type === 'MEMBER_DISCOUNT' ? data.targetMemberType : 'ALL',
+        IsActive: true,
+
+        // 💡 บันทึก Scope และผูกข้อมูลลงตารางเชื่อม (Junction Tables)
+        ScopeType: data.scopeType,
+        PromoVendors: data.scopeType === 'SPECIFIC_VENDOR' && data.selectedVendors?.length > 0 ? {
+          create: data.selectedVendors.map((vId: string) => ({ TenantID: tenantId, VendorID: vId }))
+        } : undefined,
+        
+        PromoProducts: data.scopeType === 'SPECIFIC_PRODUCT' && data.selectedProducts?.length > 0 ? {
+          create: data.selectedProducts.map((pId: string) => ({ TenantID: tenantId, ProductID: BigInt(pId) }))
+        } : undefined,
       }
     });
   }
@@ -54,15 +77,31 @@ export class PromotionsService {
       data: {
         CampaignName: data.name,
         CampaignType: data.type,
-        ConditionDesc: data.condition,
-        ConditionMinAmount: data.minAmount || 0, // 💡 บันทึกยอดขั้นต่ำ
+        ConditionDesc: data.type === 'MEMBER_DISCOUNT' ? `สำหรับสมาชิก: ${data.targetMemberType}` : data.condition,
+        ConditionMinAmount: data.minAmount || 0, 
         RewardType: data.rewardType,
         RewardValue: data.rewardValue,
         StartDate: data.startDate ? new Date(data.startDate) : null,
         EndDate: data.endDate ? new Date(data.endDate) : null,
         StartTime: data.startTime || null,
         EndTime: data.endTime || null,
-        IsActive: data.isActive
+        TargetMemberType: data.type === 'MEMBER_DISCOUNT' ? data.targetMemberType : 'ALL',
+        IsActive: data.isActive,
+
+        // 💡 อัปเดต Scope (ลบของเก่าทิ้งทั้งหมด แล้วสร้างใหม่เฉพาะที่เลือกมา)
+        ScopeType: data.scopeType,
+        PromoVendors: {
+          deleteMany: {}, // ลบข้อมูลผูกร้านค้าเดิมออกทั้งหมด
+          create: data.scopeType === 'SPECIFIC_VENDOR' && data.selectedVendors?.length > 0 
+            ? data.selectedVendors.map((vId: string) => ({ TenantID: tenantId, VendorID: vId }))
+            : []
+        },
+        PromoProducts: {
+          deleteMany: {}, // ลบข้อมูลผูกสินค้าเดิมออกทั้งหมด
+          create: data.scopeType === 'SPECIFIC_PRODUCT' && data.selectedProducts?.length > 0 
+            ? data.selectedProducts.map((pId: string) => ({ TenantID: tenantId, ProductID: BigInt(pId) }))
+            : []
+        }
       }
     });
   }

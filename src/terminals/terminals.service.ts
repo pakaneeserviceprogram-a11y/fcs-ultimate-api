@@ -19,7 +19,11 @@ export class TerminalsService {
       vendorId: t.VendorID,
       vendorName: t.Vendors?.VendorName || null,
       isActive: t.IsActive,
-      status: t.IsActive ? 'ONLINE' : 'OFFLINE'
+      
+      // 💡 ส่งข้อมูลใหม่ 3 ตัวกลับไปให้หน้าเว็บ
+      isOnline: t.IsOnline, 
+      autoPrintReceipt: t.AutoPrintReceipt,
+      taxMachineId: t.TaxMachineID || ''
     }));
   }
 
@@ -39,7 +43,12 @@ export class TerminalsService {
         TerminalName: data.name,
         TerminalType: data.type,
         VendorID: data.type === 'VENDOR' ? data.vendorId : null,
-        IsActive: data.isActive
+        IsActive: data.isActive,
+        
+        // 💡 รับค่าจากหน้าเว็บมาบันทึก
+        AutoPrintReceipt: data.autoPrint !== false, // Default เป็น true ถ้าไม่ได้ส่งมา
+        TaxMachineID: data.taxMachineId || null,
+        IsOnline: false // เครื่องใหม่สถานะเริ่มต้นคือ Offline จนกว่าจะมีการ Login หน้าร้าน
       }
     });
   }
@@ -57,7 +66,11 @@ export class TerminalsService {
         TerminalName: data.name,
         TerminalType: data.type,
         VendorID: data.type === 'VENDOR' ? data.vendorId : null,
-        IsActive: data.isActive
+        IsActive: data.isActive,
+        
+        // 💡 อัปเดตค่าจากหน้าเว็บ
+        AutoPrintReceipt: data.autoPrint !== false,
+        TaxMachineID: data.taxMachineId || null
       }
     });
   }

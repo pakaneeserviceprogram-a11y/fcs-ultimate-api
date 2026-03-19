@@ -107,9 +107,22 @@ model Products {
   MenuSchedules     MenuSchedules[]
   // 💡 เพิ่มบรรทัดนี้: ระบุว่าเป็นเมนูยืนพื้นหรือไม่ (ถ้า true จะไม่เอามาแสดงในหน้าจัดตาราง)
   IsAlwaysAvailable Boolean?          @default(false)
+   // ✅ เพิ่มบรรทัดนี้
+  PromoProducts     PromoProducts[]
 
   @@unique([TenantID, ProductCode], map: "UQ_Tenant_ProductCode")
   @@unique([TenantID, ProductID], map: "UQ_Tenant_ProductID")
+}
+
+
+model SysMemberTypes {
+  MemberTypeID Int      @id @default(autoincrement())
+  TenantID     Int
+  TypeName     String   @db.NVarChar(50)
+  IsActive     Boolean  @default(true)
+  // 💡 เพิ่มฟิลด์นี้ ให้ผูกกลุ่มสวัสดิการระดับประเภทสมาชิกได้
+  GroupID        Int?
+  @@unique([TenantID, TypeName], map: "UQ_Tenant_MemberTypeName")
 }
 
 // 💡 ตารางจัดตารางเมนูอาหารล่วงหน้า
@@ -242,6 +255,14 @@ model Terminals {
   TerminalName String         @db.NVarChar(100)
   TerminalType String         @db.NVarChar(20)
   VendorID     String?        @db.NVarChar(20)
+  // ==========================================
+  // 💡 ฟิลด์ที่ต้องเพิ่มใหม่ (รองรับระบบ Enterprise POS)
+  // ==========================================
+  IsOnline         Boolean?       @default(false)   // เก็บสถานะว่าแคชเชียร์ Login อยู่หรือไม่
+  LastHeartbeat    DateTime?      @db.DateTime      // เก็บเวลาติดต่อล่าสุด (กันแอปค้าง/เน็ตหลุด)
+  AutoPrintReceipt Boolean?       @default(true)    // ตั้งค่าให้พิมพ์ใบเสร็จอัตโนมัติหรือไม่
+  TaxMachineID     String?        @db.NVarChar(50)  // รหัสเครื่องจดทะเบียนสรรพากร (เช่น POS-001)
+  // ==========================================
   SalesOrders  SalesOrders[]
   SystemShifts SystemShifts[]
   SysTenants   SysTenants     @relation(fields: [TenantID], references: [TenantID], onUpdate: NoAction, map: "FK__Terminals__Tenan__7A672E12")
@@ -282,6 +303,8 @@ model Vendors {
   Products       Products[]
   SalesOrders    SalesOrders[]
   terminals      Terminals[]
+  // ✅ เพิ่มบรรทัดนี้
+  PromoVendors   PromoVendors[]
   SysTenants     SysTenants    @relation(fields: [TenantID], references: [TenantID], onUpdate: NoAction, map: "FK__Vendors__TenantI__5EBF139D")
   SysBranches    SysBranches?  @relation(fields: [TenantID, BranchID], references: [TenantID, BranchID], onUpdate: NoAction, map: "FK_Vendor_Branch")
 
@@ -327,9 +350,8 @@ model PromoCampaigns {
   CampaignName       String               @db.NVarChar(100)
   RewardValue        Decimal              @db.Decimal(12, 2)
   IsActive           Boolean?             @default(true)
-  CampaignType       String               @db.NVarChar(50)
   ConditionDesc      String?              @db.NVarChar(200)
-  RewardType         String?              @db.NVarChar(50)
+  RewardType         String?              @db.NVarChar(50)// 'DISCOUNT_PERCENT' (ลด %) หรือ 'DISCOUNT_CASH' (ลดเงินบาท)
   CreatedDate        DateTime?            @default(now(), map: "DF__PromoCamp__Creat__57DD0BE4") @db.DateTime
   EndDate            DateTime?            @db.DateTime
   StartDate          DateTime?            @db.DateTime
@@ -337,8 +359,46 @@ model PromoCampaigns {
   StartTime          String?              @db.NVarChar(10)
   // 💡 เพิ่มฟิลด์ใหม่นี้เข้าไป
   ConditionMinAmount Decimal?  @db.Decimal(12, 2)
+  CampaignType       String   @db.NVarChar(50) // เช่น 'MEMBER_DISCOUNT'
+  
+  // 💡 เพิ่มฟิลด์นี้: ระบุว่าโปรนี้ให้เฉพาะกลุ่มไหน (เช่น 'EMPLOYEE', 'STUDENT', 'VIP' หรือปล่อยว่างคือให้ทุกคน 'ALL')
+  TargetMemberType   String?  @db.NVarChar(50) 
+  // 💡 1. เพิ่มฟิลด์ขอบเขต เพื่อให้ POS รู้ว่าต้องเช็คเงื่อนไขลึกแค่ไหน
+  ScopeType          String   @default("ALL") @db.NVarChar(20) // 'ALL', 'SPECIFIC_VENDOR', 'SPECIFIC_PRODUCT'
+  // 💡 2. ผูก Relation ไปหาตาราง Mapping
+  PromoVendors       PromoVendors[]       // ผูกกับร้านค้า
+  PromoProducts      PromoProducts[]      // ผูกกับสินค้า
+
   // ... ฟิลด์เดิม
   PromoRedemptionLog PromoRedemptionLog[]
+}
+
+// ==========================================
+// 💡 ตารางใหม่: เก็บรายชื่อ "ร้านค้า" ที่เข้าร่วมแคมเปญ
+// ==========================================
+model PromoVendors {
+  CampaignID Int
+  TenantID   Int
+  VendorID   String   @db.NVarChar(20)
+
+  Campaign   PromoCampaigns @relation(fields: [CampaignID], references: [CampaignID], onDelete: Cascade)
+  Vendor     Vendors        @relation(fields: [TenantID, VendorID], references: [TenantID, VendorID], onDelete: Cascade)
+
+  @@id([CampaignID, VendorID]) // Composite Key ป้องกันการผูกร้านเดิมซ้ำในแคมเปญเดียวกัน
+}
+
+// ==========================================
+// 💡 ตารางใหม่: เก็บรายชื่อ "สินค้า/เมนู" ที่เข้าร่วมแคมเปญ (กรณีโปรโมชั่นเฉพาะเมนู)
+// ==========================================
+model PromoProducts {
+  CampaignID Int
+  TenantID   Int
+  ProductID  BigInt
+
+  Campaign   PromoCampaigns @relation(fields: [CampaignID], references: [CampaignID], onDelete: Cascade)
+  Product    Products       @relation(fields: [TenantID, ProductID], references: [TenantID, ProductID], onDelete: Cascade)
+
+  @@id([CampaignID, ProductID])
 }
 
 model PromoRedemptionLog {
@@ -356,6 +416,9 @@ model Departments {
   TenantID       Int
   DepartmentName String     @db.NVarChar(100)
   IsActive       Boolean?   @default(true)
+  // 💡 เพิ่มฟิลด์นี้ ให้ผูกกลุ่มสวัสดิการระดับแผนกได้
+  GroupID        Int?
+  
   SysTenants     SysTenants @relation(fields: [TenantID], references: [TenantID], onUpdate: NoAction)
 
   @@unique([TenantID, DepartmentName], map: "UQ_Tenant_DepartmentName")

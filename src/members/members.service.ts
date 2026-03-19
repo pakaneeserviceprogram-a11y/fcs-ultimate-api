@@ -34,7 +34,7 @@ export class MembersService {
         name: m.FullName,
         type: m.MemberType,
         department: m.Department,
-        groupId: m.GroupID, // ดึง GroupID มาแสดงผล
+        groupId: m.GroupID,
         rfids: activeCards.map(c => c.CardUID), 
         cashBalance: activeCards.length > 0 ? Number(activeCards[0].CashBalance) : 0,
         subsidyBalance: activeCards.length > 0 ? Number(activeCards[0].SubsidyBalance) : 0,
@@ -74,7 +74,7 @@ export class MembersService {
         FullName: data.name, 
         MemberType: data.type || 'STUDENT', 
         Department: data.department || '', 
-        GroupID: data.groupId ? Number(data.groupId) : null, // บันทึก GroupID
+        GroupID: data.groupId ? Number(data.groupId) : null,
         Status: data.status || 'ACTIVE', 
         CreatedDate: new Date() 
       } 
@@ -95,7 +95,7 @@ export class MembersService {
         FullName: data.name || existing.FullName, 
         MemberType: data.type || existing.MemberType, 
         Department: data.department !== undefined ? data.department : existing.Department, 
-        GroupID: data.groupId ? Number(data.groupId) : null, // อัปเดต GroupID
+        GroupID: data.groupId ? Number(data.groupId) : null,
         Status: data.status || existing.Status 
       }
     });
@@ -113,11 +113,9 @@ export class MembersService {
     const existingCard = await this.prisma.cards.findFirst({ where: { TenantID: tenantId, CardUID: rfid } });
 
     if (existingCard) {
-      // โค้ดส่วนนี้อาจฟ้องแดงที่ existingCard.MemberID ไม่เป็นไรครับ ปล่อยไว้ได้ มันจะรันผ่าน เพราะเราใช้ ExecuteRaw ดึงตรง
       if ((existingCard as any).MemberID !== null && (existingCard as any).MemberID !== memberId) {
         throw new BadRequestException('บัตรใบนี้ถูกผูกกับสมาชิกท่านอื่นอยู่แล้ว!');
       }
-      
       await this.prisma.$executeRaw`
         UPDATE [dbo].[Cards]
         SET [MemberID] = ${memberId}, [Status] = 'ACTIVE'
@@ -129,7 +127,6 @@ export class MembersService {
         VALUES (${tenantId}, ${memberId}, ${rfid}, 'ACTIVE', 0, 0)
       `;
     }
-
     return { success: true, message: 'ผูกบัตรสำเร็จเรียบร้อย' };
   }
 
@@ -141,19 +138,25 @@ export class MembersService {
       where: { TenantID: tenantId, IsActive: true },
       orderBy: { DepartmentName: 'asc' }
     });
-    return deps.map(d => ({ id: d.DepartmentID, name: d.DepartmentName }));
+    // 💡 ส่ง GroupID กลับไปให้หน้าจอด้วย
+    return deps.map(d => ({ id: d.DepartmentID, name: d.DepartmentName, groupId: d.GroupID }));
   }
 
-  async createDepartment(tenantId: number, name: string) {
-    const existing = await this.prisma.departments.findFirst({ where: { TenantID: tenantId, DepartmentName: name, IsActive: true } });
-    if (existing) throw new BadRequestException(`ชื่อแผนก "${name}" มีในระบบแล้ว`);
-    const dep = await this.prisma.departments.create({ data: { TenantID: tenantId, DepartmentName: name, IsActive: true } });
-    return { id: dep.DepartmentID, name: dep.DepartmentName };
+  async createDepartment(tenantId: number, data: any) {
+    const existing = await this.prisma.departments.findFirst({ where: { TenantID: tenantId, DepartmentName: data.name, IsActive: true } });
+    if (existing) throw new BadRequestException(`ชื่อแผนก "${data.name}" มีในระบบแล้ว`);
+    const dep = await this.prisma.departments.create({ 
+      data: { TenantID: tenantId, DepartmentName: data.name, GroupID: data.groupId ? Number(data.groupId) : null, IsActive: true } 
+    });
+    return { id: dep.DepartmentID, name: dep.DepartmentName, groupId: dep.GroupID };
   }
 
-  async updateDepartment(tenantId: number, id: number, name: string) {
-    const updated = await this.prisma.departments.update({ where: { DepartmentID: id }, data: { DepartmentName: name } });
-    return { id: updated.DepartmentID, name: updated.DepartmentName };
+  async updateDepartment(tenantId: number, id: number, data: any) {
+    const updated = await this.prisma.departments.update({ 
+      where: { DepartmentID: id }, 
+      data: { DepartmentName: data.name, GroupID: data.groupId ? Number(data.groupId) : null } 
+    });
+    return { id: updated.DepartmentID, name: updated.DepartmentName, groupId: updated.GroupID };
   }
 
   async deleteDepartment(tenantId: number, id: number) {
@@ -188,6 +191,40 @@ export class MembersService {
 
   async deleteCardGroup(tenantId: number, groupId: number) {
     await this.prisma.cardGroups.update({ where: { TenantID_GroupID: { TenantID: tenantId, GroupID: groupId } }, data: { IsDeleted: true } });
+    return { success: true };
+  }
+
+  // ==========================================
+  // 8. จัดการประเภทสมาชิก (Member Types)
+  // ==========================================
+  async getMemberTypes(tenantId: number) {
+    const types = await this.prisma.sysMemberTypes.findMany({
+      where: { TenantID: tenantId, IsActive: true },
+      orderBy: { TypeName: 'asc' }
+    });
+    // 💡 ส่ง GroupID กลับไปให้หน้าจอด้วย
+    return types.map(t => ({ id: t.MemberTypeID, name: t.TypeName, groupId: t.GroupID }));
+  }
+
+  async createMemberType(tenantId: number, data: any) {
+    const existing = await this.prisma.sysMemberTypes.findFirst({ where: { TenantID: tenantId, TypeName: data.name, IsActive: true } });
+    if (existing) throw new BadRequestException(`ประเภทสมาชิก "${data.name}" มีอยู่ในระบบแล้ว`);
+    const newType = await this.prisma.sysMemberTypes.create({ 
+      data: { TenantID: tenantId, TypeName: data.name, GroupID: data.groupId ? Number(data.groupId) : null, IsActive: true } 
+    });
+    return { id: newType.MemberTypeID, name: newType.TypeName, groupId: newType.GroupID };
+  }
+
+  async updateMemberType(tenantId: number, id: number, data: any) {
+    const updated = await this.prisma.sysMemberTypes.update({ 
+      where: { MemberTypeID: id }, 
+      data: { TypeName: data.name, GroupID: data.groupId ? Number(data.groupId) : null } 
+    });
+    return { id: updated.MemberTypeID, name: updated.TypeName, groupId: updated.GroupID };
+  }
+
+  async deleteMemberType(tenantId: number, id: number) {
+    await this.prisma.sysMemberTypes.update({ where: { MemberTypeID: id }, data: { IsActive: false } });
     return { success: true };
   }
 }

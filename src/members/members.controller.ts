@@ -37,19 +37,42 @@ export class MembersController {
     return this.membersService.getDepartments(Number(tenantId));
   }
 
-  @Post('departments')
-  async createDepartment(@Headers('x-tenant-id') tenantId: string, @Body('name') name: string) {
-    return this.membersService.createDepartment(Number(tenantId), name);
-  }
+ // ---------- แผนก ----------
+ @Post('departments')
+ async createDepartment(@Headers('x-tenant-id') tenantId: string, @Body() body: any) {
+   return this.membersService.createDepartment(Number(tenantId), body);
+ }
 
-  @Patch('departments/:id')
-  async updateDepartment(@Headers('x-tenant-id') tenantId: string, @Param('id') id: string, @Body('name') name: string) {
-    return this.membersService.updateDepartment(Number(tenantId), Number(id), name);
-  }
+ @Patch('departments/:id')
+ async updateDepartment(@Headers('x-tenant-id') tenantId: string, @Param('id') id: string, @Body() body: any) {
+   return this.membersService.updateDepartment(Number(tenantId), Number(id), body);
+ }
 
   @Delete('departments/:id')
   async deleteDepartment(@Headers('x-tenant-id') tenantId: string, @Param('id') id: string) {
     return this.membersService.deleteDepartment(Number(tenantId), Number(id));
+  }
+
+  // ---------- 💡 โซนจัดการประเภทสมาชิก (Member Types) ที่เพิ่มใหม่ ----------
+  @Get('types')
+  async getMemberTypes(@Headers('x-tenant-id') tenantId: string) {
+    return this.membersService.getMemberTypes(Number(tenantId));
+  }
+
+  // ---------- ประเภทสมาชิก ----------
+  @Post('types')
+  async createMemberType(@Headers('x-tenant-id') tenantId: string, @Body() body: any) {
+    return this.membersService.createMemberType(Number(tenantId), body);
+  }
+
+  @Patch('types/:id')
+  async updateMemberType(@Headers('x-tenant-id') tenantId: string, @Param('id') id: string, @Body() body: any) {
+    return this.membersService.updateMemberType(Number(tenantId), Number(id), body);
+  }
+
+  @Delete('types/:id')
+  async deleteMemberType(@Headers('x-tenant-id') tenantId: string, @Param('id') id: string) {
+    return this.membersService.deleteMemberType(Number(tenantId), Number(id));
   }
 
 
